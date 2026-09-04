@@ -101,12 +101,16 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 	}
 
 	// 注意 .Context(ctx) 会替换掉 NewSearchAction 里设的 60s deadline，必须在其后重新 Timeout，
-	// 否则搜索页不 stable 时 MustWaitStable/MustWait 会永久挂起（无 deadline 可依赖）。
+	// 否则搜索页不 stable 时 MustWaitDOMStable/MustWait 会永久挂起（无 deadline 可依赖）。
 	page := s.page.Context(ctx).Timeout(60 * time.Second)
 
 	searchURL := makeSearchURL(keyword)
 	page.MustNavigate(searchURL)
-	page.MustWaitStable()
+	// 用 MustWaitDOMStable 而非 MustWaitStable：后者还会等网络请求完全空闲
+	// （WaitRequestIdle），但搜索结果页背景埋点/预取流量持续不断，永远等不到
+	// 空闲窗口，导致这一步吃光整个 60s 预算，下一行 MustWait 必超时 panic。
+	// 数据是否到位由下一行的 __INITIAL_STATE__ 检查真正把关，这里只需要 DOM 稳定。
+	page.MustWaitDOMStable()
 	page.MustWait(`() => window.__INITIAL_STATE__ !== undefined`)
 	humanize.Delay(ctx, humanize.AfterNavigate)
 
