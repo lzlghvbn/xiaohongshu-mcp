@@ -177,7 +177,7 @@ var toolThrottle sync.Mutex
 var lastToolCallAt time.Time
 
 // minToolInterval 两次工具调用之间的最短间隔，见 CLAUDE.local.md 里的节流约定。
-const minToolInterval = 15 * time.Second
+const minToolInterval = 8 * time.Second
 
 func withPanicRecovery[T any](
 	toolName string,
