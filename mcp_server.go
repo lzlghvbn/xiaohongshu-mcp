@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"runtime/debug"
+	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sirupsen/logrus"
@@ -138,10 +140,41 @@ func InitMCPServer(appServer *AppServer) *mcp.Server {
 	// 注册所有工具
 	registerTools(server, appServer)
 
+	// 当前只做"检索 + 读详情"，其余工具先摘掉，缩小误触发/触发风控的面。
+	// 要恢复某个工具，把它的名字从这个列表删掉即可，不用改 registerTools。
+	disabledTools := []string{
+		"get_login_qrcode",
+		"delete_cookies",
+		"publish_content",
+		"list_feeds",
+		"user_profile",
+		"post_comment_to_feed",
+		"reply_comment_in_feed",
+		"publish_with_video",
+		"like_feed",
+		"favorite_feed",
+		"get_my_profile",
+		"get_unread_count",
+		"list_notifications",
+		"reply_notification",
+		"like_notification",
+	}
+	server.RemoveTools(disabledTools...)
+	logrus.Infof("已屏蔽 %d 个工具，当前启用: check_login_status, search_feeds, get_feed_detail", len(disabledTools))
+
 	logrus.Info("MCP Server initialized with official SDK")
 
 	return server
 }
+
+// toolThrottle 串行化所有工具调用，且与上一次调用结束之间至少间隔 minToolInterval。
+// 目的是防止连续/并发调用把请求密度打上去、触发小红书风控——所有工具共用同一把锁，
+// 不分工具名，因为风控看的是账号整体请求频率，不是单个工具。
+var toolThrottle sync.Mutex
+var lastToolCallAt time.Time
+
+// minToolInterval 两次工具调用之间的最短间隔，见 CLAUDE.local.md 里的节流约定。
+const minToolInterval = 15 * time.Second
 
 func withPanicRecovery[T any](
 	toolName string,
@@ -171,7 +204,21 @@ func withPanicRecovery[T any](
 			}
 		}()
 
-		return handler(ctx, req, args)
+		toolThrottle.Lock()
+		defer toolThrottle.Unlock()
+
+		if wait := minToolInterval - time.Since(lastToolCallAt); wait > 0 {
+			logrus.Infof("节流：%s 等待 %s 后再执行，避免请求过密触发风控", toolName, wait.Round(time.Second))
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
+			}
+		}
+
+		result, resp, err = handler(ctx, req, args)
+		lastToolCallAt = time.Now()
+		return
 	}
 }
 

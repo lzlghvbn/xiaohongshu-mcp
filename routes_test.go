@@ -53,11 +53,13 @@ func TestMCPStatelessSinglePost(t *testing.T) {
 	assert.NotEmpty(t, result.Result.Tools, "应返回已注册的工具")
 }
 
-// TestNotificationToolsRegistered 固定通知相关工具已注册到 MCP。
+// TestMCPExposedToolsAreMinimal 固定当前对外暴露的 MCP 工具集只有「检索 + 读详情」
+// 这三个：check_login_status、search_feeds、get_feed_detail。
 //
-// 三个工具的注册各是 registerTools 里一段独立代码，漏掉任何一个编译都不会报错，
-// 只有真正调用时才会发现工具不存在。
-func TestNotificationToolsRegistered(t *testing.T) {
+// 其余工具在 InitMCPServer 里被 RemoveTools 摘掉了（见 mcp_server.go 的
+// disabledTools），目的是缩小误触发/触发小红书风控的面，见 CLAUDE.local.md。
+// 以后要恢复某个工具，从 disabledTools 删名字，这个测试要跟着改期望值。
+func TestMCPExposedToolsAreMinimal(t *testing.T) {
 	router := setupRoutes(NewAppServer(NewXiaohongshuService(), ""))
 	server := httptest.NewServer(router)
 	defer server.Close()
@@ -81,14 +83,12 @@ func TestNotificationToolsRegistered(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
-	names := make(map[string]bool, len(result.Result.Tools))
+	var names []string
 	for _, tool := range result.Result.Tools {
-		names[tool.Name] = true
+		names = append(names, tool.Name)
 	}
 
-	for _, want := range []string{"get_unread_count", "list_notifications", "reply_notification", "like_notification"} {
-		assert.True(t, names[want], "工具 %s 应已注册", want)
-	}
+	assert.ElementsMatch(t, []string{"check_login_status", "search_feeds", "get_feed_detail"}, names)
 }
 
 // TestNotificationRoutesRegistered 固定通知的 HTTP 路由存在。
