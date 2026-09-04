@@ -131,7 +131,10 @@ func InitMCPServer(appServer *AppServer) *mcp.Server {
 	// 创建 MCP Server
 	server := mcp.NewServer(
 		&mcp.Implementation{
-			Name:    "xiaohongshu-mcp",
+			Name: "xiaohongshu-mcp",
+			// Title 给 UI/搜索匹配用（客户端按名字做工具检索时会优先看它）；
+			// Name 是工具前缀（xiaohongshu-mcp:search_feeds），不能改。
+			Title:   "小红书",
 			Version: "2.0.0",
 		},
 		nil,
