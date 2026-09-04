@@ -105,11 +105,21 @@ func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, 
 	logrus.Infof("配置: 点击更多=%v, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
 		config.ClickMoreReplies, config.MaxRepliesThreshold, config.MaxCommentItems, config.ScrollSpeed)
 
-	// 使用retry-go处理页面导航和DOM稳定等待
+	// 使用retry-go处理页面导航
 	err := retry.Do(
 		func() error {
 			page.MustNavigate(url)
-			page.MustWaitDOMStable()
+			// 不用 MustWaitDOMStable：详情页底部的推荐流/评论会持续懒加载，
+			// 内容重的笔记整页永远不会"安静"，实测卡过 2 分钟以上。真正要等的
+			// 是 noteDetailMap 就绪；笔记本身不可访问时它永远不会出现，所以
+			// 加一条错误提示容器作为退出条件，交给后面的 checkPageAccessible
+			// 判断具体原因，不然会在这里傻等到超时才失败。
+			page.MustWait(`() => {
+				if (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.note && window.__INITIAL_STATE__.note.noteDetailMap) {
+					return true;
+				}
+				return document.querySelector('.access-wrapper, .error-wrapper, .not-found-wrapper, .blocked-wrapper') !== null;
+			}`)
 			return nil
 		},
 		retry.Attempts(3),
