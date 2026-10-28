@@ -4,7 +4,7 @@
 
 ### 合并上游
 - 上游 `xpzouying/xiaohongshu-mcp`，已加 remote `upstream`（只 fetch，不推送）。
-- 在分支 `fix/search-feeds-wait-stable-timeout` 合并 `upstream/main`，提交 `14c5d4c`，**尚未推送、尚未合入本地 main**。
+- 在定制分支 `custom`（原 `fix/search-feeds-wait-stable-timeout`）合并 `upstream/main`，提交 `14c5d4c`，**尚未推送**。
 - 上游新增：发布前关引导卡/建创作者中心会话（#853、#855）、详情页改等关键容器（#814）、搜索筛选跳过默认值与面板内指针路径（#816、#858）。上游最新语义化 tag 为 `v2.5.5`。
 - 唯一冲突在 `xiaohongshu/feed_detail.go`：取上游 `waitFeedPageReady`（纯 go-rod、8s 上限），弃用本地的 `noteDetailMap` JS 等待（符合"能用 go-rod 就不注入 JS"）。
 - `search.go` 保留本地 `MustWaitDOMStable` 修复，上游没动那一行。
@@ -27,10 +27,16 @@
 - Claude Desktop：`claude_desktop_config.json` 的 `mcpServers.xiaohongshu` 用 `/opt/homebrew/bin/npx -y mcp-remote http://127.0.0.1:18060/mcp`；改前备份为同目录 `.bak-20261028`。
 - 两个客户端共用一个服务，共用互斥锁和 8s 节流。
 
+### 分支约定
+- `main` 只做上游镜像，跟踪 `upstream/main`，只用 `git merge --ff-only upstream/main` 更新，不放定制。
+- `custom` 是日常使用和构建的分支（含节流、工具收窄等本地定制）；同步上游：先快进 `main`，再 `git merge main`，冲突只会出在 `custom`。
+- 仓库平时请停在 `custom`：`update.sh` 编译的是当前检出的分支。
+- 给上游提 PR 时从干净的 `main` 另开分支。
+
 ### 清理
 - 同级旧目录 `~/Workspace/xiaohongshu`（9 月的发布版二进制 + 过期 cookies）已移入废纸篓。
 
 ### 待办
-- review 合并提交，再决定推送与合入 main（需用户同意后才推）。
+- review 合并提交，再决定是否推送 `custom`（需用户同意后才推；`origin/main` 仍是旧的）。
 - 实测 `search_feeds` / `get_feed_detail`。
 - 确认 Claude Desktop 里 xiaohongshu 能出现（首次 `npx` 需下载 `mcp-remote`）。
